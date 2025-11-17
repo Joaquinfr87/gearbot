@@ -28,10 +28,9 @@ const SOUNDS = {
 
 const CYLINDER_SLOTS = 6;
 
-// URLs de imágenes para embeds
 const IMAGES = {
-  click: 'https://i.imgur.com/bHpIcj1.jpeg', // reemplaza con tu URL
-  shot: 'https://i.imgur.com/Rfk4JJj.jpeg'    // reemplaza con tu URL
+  click: 'https://i.imgur.com/bHpIcj1.jpeg',
+  shot: 'https://i.imgur.com/Rfk4JJj.jpeg'
 };
 
 client.once('ready', () => {
@@ -78,47 +77,59 @@ client.on('messageCreate', async (msg) => {
   const player = createAudioPlayer();
   connection.subscribe(player);
 
-  try {
-    msg.reply(`Girando el tambor... 🎲 (balas: ${bullets})`);
-    playFile(player, SOUNDS.drum, 0.5);
+  msg.reply(`Girando el tambor... 🎲 (balas: ${bullets})`);
+  playFile(player, SOUNDS.drum, 0.5);
 
-    // Elegir slots con balas
-    const allSlots = Array.from({ length: CYLINDER_SLOTS }, (_, i) => i + 1);
-    const bulletSlots = [];
-    while (bulletSlots.length < bullets) {
-      const pick = allSlots[Math.floor(Math.random() * allSlots.length)];
-      if (!bulletSlots.includes(pick)) bulletSlots.push(pick);
+  // Elegir slots con balas
+  const allSlots = Array.from({ length: CYLINDER_SLOTS }, (_, i) => i + 1);
+  const bulletSlots = [];
+  while (bulletSlots.length < bullets) {
+    const pick = allSlots[Math.floor(Math.random() * allSlots.length)];
+    if (!bulletSlots.includes(pick)) bulletSlots.push(pick);
+  }
+
+  const playerSlot = Math.floor(Math.random() * CYLINDER_SLOTS) + 1;
+
+  setTimeout(() => {
+    let soundToPlay, embed;
+    let disconnectPlayer = false;
+
+    if (bulletSlots.includes(playerSlot)) {
+      // Disparo
+      soundToPlay = SOUNDS.shot;
+      disconnectPlayer = true; // jugador será desconectado
+      embed = new EmbedBuilder()
+        .setTitle('💥 ¡BOOM!')
+        .setDescription(`${msg.author} ha perdido. (slot ${playerSlot})`)
+        .setImage(IMAGES.shot)
+        .setColor('Red');
+    } else {
+      // Click
+      soundToPlay = SOUNDS.click;
+      embed = new EmbedBuilder()
+        .setTitle('✅ Clic')
+        .setDescription(`${msg.author} se ha salvado. (slot ${playerSlot})`)
+        .setImage(IMAGES.click)
+        .setColor('Green');
     }
 
-    const playerSlot = Math.floor(Math.random() * CYLINDER_SLOTS) + 1;
+    msg.reply({ embeds: [embed] });
+    playFile(player, soundToPlay, 0.7);
 
-    setTimeout(() => {
-      if (bulletSlots.includes(playerSlot)) {
-        playFile(player, SOUNDS.shot, 0.5);
-        const embed = new EmbedBuilder()
-          .setTitle('💥 ¡BOOM!')
-          .setDescription(`${msg.author} ha perdido. (slot ${playerSlot})`)
-          .setImage(IMAGES.shot)
-          .setColor('Red');
-        msg.reply({ embeds: [embed] });
-      } else {
-        playFile(player, SOUNDS.click, 0.7);
-        const embed = new EmbedBuilder()
-          .setTitle('✅ Clic')
-          .setDescription(`${msg.author} se ha salvado. (slot ${playerSlot})`)
-          .setImage(IMAGES.click)
-          .setColor('Green');
-        msg.reply({ embeds: [embed] });
+    // Esperar a que termine el audio
+    player.once(AudioPlayerStatus.Idle, () => {
+      // Desconectar al jugador si perdió
+      if (disconnectPlayer) {
+        if (member.voice.channel) {
+          member.voice.disconnect().catch(err => console.error("No se pudo desconectar al jugador:", err));
+        }
       }
+      // Desconectar al bot del canal
+      connection.destroy();
+    });
 
-      setTimeout(() => connection.destroy(), 2000);
-    }, 700);
+  }, 700);
 
-  } catch (err) {
-    console.error('Error durante la partida:', err);
-    msg.reply('Ocurrió un error durante la partida.');
-    connection.destroy();
-  }
 });
 
 client.login(process.env.DISCORD_TOKEN);
